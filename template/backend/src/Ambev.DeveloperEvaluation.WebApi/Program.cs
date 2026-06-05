@@ -53,6 +53,25 @@ public class Program
             builder.Services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
 
             var app = builder.Build();
+
+            // === Inicialização automática do banco ===
+            using (var scope = app.Services.CreateScope())
+            {
+                var services = scope.ServiceProvider;
+                var dbContext = services.GetRequiredService<DefaultContext>();
+                
+                Log.Information("[Startup] Verificando migrations pendentes...");
+                dbContext.Database.Migrate();
+                Log.Information("[Startup] Migrations aplicadas com sucesso.");
+
+                Log.Information("[Startup] Verificando seeds...");
+                var mongoSnapshotRepo = services.GetRequiredService<Ambev.DeveloperEvaluation.Domain.Repositories.ISaleSnapshotRepository>();
+                var passwordHasher = services.GetRequiredService<IPasswordHasher>();
+                Ambev.DeveloperEvaluation.ORM.Seeds.DatabaseSeeder.SeedAsync(dbContext, mongoSnapshotRepo, passwordHasher, Log.Logger).GetAwaiter().GetResult();
+                Log.Information("[Startup] Seeds verificados/aplicados com sucesso.");
+            }
+            // === Fim da inicialização automática ===
+
             app.UseMiddleware<ValidationExceptionMiddleware>();
 
             if (app.Environment.IsDevelopment())
